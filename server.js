@@ -1,5 +1,7 @@
 import express from "express";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import Database from "better-sqlite3";
 
 const { BOT_TOKEN, MERCHANT, ALLOW_ORIGIN = "*", CHANNEL = "@KCPMINER", BOT_USERNAME = "KCPMINER_BOT", MINIAPP_URL = "https://mnoobgamerff07-source.github.io/KCPMINER/", ADMIN_ID = "", WEBHOOK_SECRET = "", TONCENTER_KEY = "", PORT = 3000 } = process.env;
@@ -8,7 +10,17 @@ if (!BOT_TOKEN || !MERCHANT) { console.error("Set BOT_TOKEN and MERCHANT in .env
 const LEVELS = [0, 10, 50, 116, 500, 2000, 5000, 10000, 25000];
 const BASE = 8, RATE = 0.0038, FEE = 1.05, MAX_ACCRUAL = 24 * 3600e3;
 
-const db = new Database(process.env.DB_PATH || "kcp.db"); // on Render set DB_PATH=/data/kcp.db (persistent disk)
+// On Render with a persistent disk set DB_PATH=/data/kcp.db. If that folder can't be used
+// (for example on the Free plan, which has no disk) fall back to ./kcp.db instead of crashing.
+let DB_FILE = process.env.DB_PATH || "kcp.db";
+try {
+  fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
+  fs.accessSync(path.dirname(DB_FILE), fs.constants.W_OK);
+} catch {
+  console.warn("DB_PATH folder is not usable, using ./kcp.db. Data will NOT survive restarts.");
+  DB_FILE = "kcp.db";
+}
+const db = new Database(DB_FILE);
 db.exec(`
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, bal REAL DEFAULT 0, hold REAL DEFAULT 0, ver INTEGER DEFAULT 0, wallet TEXT, last_claim INTEGER);
 CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id INTEGER, nano INTEGER, kcp INTEGER, status TEXT DEFAULT 'pending', expires INTEGER, tx_hash TEXT UNIQUE);
